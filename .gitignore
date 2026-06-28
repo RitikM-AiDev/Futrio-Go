@@ -24,3 +24,11 @@ dist-electron
 *.sln
 *.sw?
 release
+node_modules
+dist
+release
+out
+*.exe
+*.AppImage
+*.deb
+*.snap
