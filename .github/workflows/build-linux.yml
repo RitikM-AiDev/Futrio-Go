@@ -11,11 +11,13 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
 
       - run: npm ci
 
       - run: npm run dist:linux
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: actions/upload-artifact@v4
         with:
@@ -23,4 +25,3 @@ jobs:
           path: |
             release/*.AppImage
             release/*.deb
-            release/*.snap
