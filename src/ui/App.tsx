@@ -16,8 +16,8 @@ const ipcRenderer = electron?.ipcRenderer ?? null
 const shell = electron?.shell ?? null
 
 
-const API_ENDPOINT = 'https://futrio-go-backend.onrender.com/api/ask/automate/query/adhd/sjds/user'
-const TRANSCRIBE_ENDPOINT = 'https://futrio-go-backend.onrender.com/api/admin/futrio/transcribe/at/live/244/futrio'
+const API_ENDPOINT = 'https://ritik-aidev-futriogobackend.hf.space/api/ask/automate/query/adhd/sjds/user'
+const TRANSCRIBE_ENDPOINT = 'https://ritik-aidev-futriogobackend.hf.space/api/admin/futrio/transcribe/at/live/244/futrio'
 
 interface Message {
   id: number
