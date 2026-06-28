@@ -1,0 +1,131 @@
+@import url('https://fonts.googleapis.com/css2?family=Google+Sans:wght@300;400;500;600&family=Roboto:wght@300;400;500&display=swap');
+.settings-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 999;
+  border-radius: inherit;
+}
+
+.settings-box {
+  background: #1e1e1e;
+  border: 1px solid #333;
+  border-radius: 16px;
+  padding: 28px;
+  width: 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: center;
+  text-align: center;
+}
+
+.settings-box h3 {
+  margin: 0;
+  font-size: 16px;
+  color: #fff;
+}
+
+.settings-box p {
+  margin: 0;
+  font-size: 13px;
+  color: #888;
+}
+
+.settings-box input {
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 1px solid #444;
+  background: #2a2a2a;
+  color: #fff;
+  font-size: 13px;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.settings-box input:focus {
+  border-color: #4f8ef7;
+}
+
+.settings-box button {
+  width: 100%;
+  padding: 10px;
+  border-radius: 8px;
+  border: none;
+  background: #4f8ef7;
+  color: #fff;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.settings-box button:hover {
+  background: #3a7de0;
+}
+
+.settings-buttons {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+}
+
+.settings-buttons button:last-child {
+  background: #333;
+}
+
+.settings-buttons button:last-child:hover {
+  background: #444;
+}
+:root {
+  --ga-blue: #4285f4;
+  --ga-red: #ea4335;
+  --ga-yellow: #fbbc04;
+  --ga-green: #34a853;
+  --glass-bg: #0d1117;
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --surface: #131c2e;
+  --surface-2: #162033;
+  --text-primary: rgba(255, 255, 255, 0.95);
+  --text-secondary: rgba(255, 255, 255, 0.55);
+  --accent: #8ab4f8;
+  --input-bg: rgba(255, 255, 255, 0.05);
+  font-family: 'Google Sans', 'Roboto', system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  background: transparent !important;
+  overflow: hidden;
+  width: 100%;
+  height: 100%;
+  user-select: none;
+}
+
+#root {
+  width: 100%;
+  height: 100vh;
+  background: transparent;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+::-webkit-scrollbar {
+  width: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 2px;
+}
