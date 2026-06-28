@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+requests
+openai
+openai-agents
+python-dotenv
+langchain
+langchain-community
+faster-whisper
+python-multipart

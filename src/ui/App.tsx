@@ -1,5 +1,8 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import './App.css'
+import SetupWizard from './SetupWizard'
 
 declare global {
   interface Window {
@@ -13,12 +16,14 @@ const ipcRenderer = electron?.ipcRenderer ?? null
 const shell = electron?.shell ?? null
 
 
-const API_ENDPOINT = 'http://localhost:8000/api/query/user'
+const API_ENDPOINT = 'https://futrio-go-backend.onrender.com/api/ask/automate/query/adhd/sjds/user'
+const TRANSCRIBE_ENDPOINT = 'https://futrio-go-backend.onrender.com/api/admin/futrio/transcribe/at/live/244/futrio'
 
 interface Message {
   id: number
   role: 'user' | 'assistant'
   text: string
+  audioUrl?: string
   isError?: boolean
 }
 
@@ -53,6 +58,8 @@ export default function App() {
   const [query, setQuery] = useState('')
   const [loading, setLoading] = useState(false)
   const [listening, setListening] = useState(false)
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const audioChunksRef = useRef<Blob[]>([])
   const [greeting] = useState(() => GREETINGS[Math.floor(Math.random() * GREETINGS.length)])
   const [showSettings, setShowSettings] = useState(false)
   const [apiKey, setApiKey] = useState('')
@@ -85,6 +92,14 @@ export default function App() {
     setSerperKey('')
   }
 
+  // Called by SetupWizard when the user finishes the onboarding flow
+  const handleWizardComplete = async (gemini: string, tavily: string, serper: string) => {
+    await ipcRenderer?.invoke('save-api-key', gemini)
+    await ipcRenderer?.invoke('save-tavily-key', tavily)
+    await ipcRenderer?.invoke('save-serper-key', serper)
+    setHasKey(true)
+  }
+
   const sendMessage = async (text: string) => {
     if (!text.trim() || loading) return
 
@@ -105,7 +120,7 @@ export default function App() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-API-Key':    key    ?? '',
+          'X-API-Key': key ?? '',
           'X-Tavily-Key': tavilyK ?? '',
           'X-Serper-Key': serperK ?? '',
         },
@@ -145,12 +160,102 @@ export default function App() {
     sendMessage(text)
   }
 
-  const handleMic = () => {
-    setListening(l => !l)
-    if (!listening) {
-      setTimeout(() => setListening(false), 3000)
+  const handleMic = useCallback(async () => {
+    // ── STOP recording ──────────────────────────────────────────
+    if (listening) {
+      mediaRecorderRef.current?.stop()
+      setListening(false)
+      return
     }
-  }
+
+    // ── START recording ─────────────────────────────────────────
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+        ? 'audio/webm;codecs=opus'
+        : MediaRecorder.isTypeSupported('audio/webm')
+          ? 'audio/webm'
+          : 'audio/ogg'
+
+      const recorder = new MediaRecorder(stream, { mimeType })
+      mediaRecorderRef.current = recorder
+      audioChunksRef.current = []
+
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data)
+      }
+
+      recorder.onstop = async () => {
+        // Stop all tracks to release the mic indicator
+        stream.getTracks().forEach(t => t.stop())
+
+        const audioBlob = new Blob(audioChunksRef.current, { type: mimeType })
+        audioChunksRef.current = []
+
+        // Show a playable audio bubble in chat
+        const audioUrl = URL.createObjectURL(audioBlob)
+        setMessages(prev => [...prev, {
+          id: ++msgId,
+          role: 'user',
+          text: '',
+          audioUrl,
+        }])
+
+        // Fetch the three API keys (same as sendMessage)
+        const [key, tavilyK, serperK] = await Promise.all([
+          ipcRenderer?.invoke('get-api-key'),
+          ipcRenderer?.invoke('get-tavily-key'),
+          ipcRenderer?.invoke('get-serper-key'),
+        ])
+
+        const ext = mimeType.includes('ogg') ? 'ogg' : 'webm'
+        const formData = new FormData()
+        formData.append('file', audioBlob, `recording.${ext}`)
+
+        // Send audio and handle the response exactly like sendMessage
+        setLoading(true)
+        try {
+          const res = await fetch(TRANSCRIBE_ENDPOINT, {
+            method: 'POST',
+            headers: {
+              'X-API-Key': key ?? '',
+              'X-Tavily-Key': tavilyK ?? '',
+              'X-Serper-Key': serperK ?? '',
+            },
+            body: formData,
+          })
+
+          if (!res.ok) throw new Error(`Server error: ${res.status}`)
+
+          const data = await res.json()
+          if (data.url && data.url !== 'None') {
+            shell?.openExternal(data.url)
+          }
+          const replyText = data.reply || 'Completed the task you assigned to me boss'
+          setMessages(prev => [...prev, { id: ++msgId, role: 'assistant', text: replyText }])
+        } catch (err: any) {
+          setMessages(prev => [...prev, {
+            id: ++msgId,
+            role: 'assistant',
+            text: `⚠️ ${err.message ?? 'Could not connect to server.'}`,
+            isError: true,
+          }])
+        } finally {
+          setLoading(false)
+        }
+      }
+
+      recorder.start()
+      setListening(true)
+    } catch (err: any) {
+      setMessages(prev => [...prev, {
+        id: ++msgId,
+        role: 'assistant',
+        text: `⚠️ Microphone error: ${err.message}`,
+        isError: true,
+      }])
+    }
+  }, [listening])
 
   const handleMinimize = () => {
     ipcRenderer?.send('minimize-window')
@@ -165,36 +270,8 @@ export default function App() {
   return (
     <div className="assistant-card">
 
-      {/* Setup screen - blocks app if no keys */}
-      {!hasKey && !showSettings && (
-        <div className="settings-overlay">
-          <div className="settings-box">
-            <FGLogo />
-            <h3>Setup Required</h3>
-            <p>Enter your API keys to get started</p>
-            <input
-              type="password"
-              placeholder="Gemini API Key (AIza...)"
-              value={apiKey}
-              onChange={e => setApiKey(e.target.value)}
-            />
-            <input
-              type="password"
-              placeholder="Tavily API Key"
-              value={tavilyKey}
-              onChange={e => setTavilyKey(e.target.value)}
-            />
-            <input
-              type="password"
-              placeholder="Serper API Key"
-              value={serperKey}
-              onChange={e => setSerperKey(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && saveKey()}
-            />
-            <button onClick={saveKey}>Save &amp; Continue</button>
-          </div>
-        </div>
-      )}
+      {/* Setup Wizard - blocks app until all keys are saved */}
+      {!hasKey && <SetupWizard onComplete={handleWizardComplete} />}
 
       {/* Settings screen */}
       {showSettings && (
@@ -278,18 +355,29 @@ export default function App() {
               <div className="msg-avatar">
                 {msg.role === 'assistant' ? '' : 'U'}
               </div>
-              <div className={`msg-bubble ${msg.isError ? 'error-bubble' : ''}`}>
-                {msg.text}
+              <div className={`msg-bubble ${msg.isError ? 'error-bubble' : ''} ${msg.audioUrl ? 'audio-bubble' : ''} ${msg.role === 'assistant' && !msg.audioUrl ? 'markdown-bubble' : ''}`}>
+                {msg.audioUrl ? (
+                  <audio controls src={msg.audioUrl} className="chat-audio" />
+                ) : msg.role === 'assistant' ? (
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.text}</ReactMarkdown>
+                ) : (
+                  msg.text
+                )}
               </div>
             </div>
           ))}
           {loading && (
             <div className="message assistant">
               <div className="msg-avatar"></div>
-              <div className="msg-bubble">
-                <div className="typing-dots">
-                  <span /><span /><span />
+              <div className="msg-bubble researching-bubble">
+                <div className="researching-header">
+                  <span className="researching-icon">🔍</span>
+                  <span className="researching-text">This may take a moment while I research the web</span>
+                  <span className="researching-ellipsis">
+                    <span>.</span><span>.</span><span>.</span>
+                  </span>
                 </div>
+                <div className="researching-bar"><div className="researching-bar-fill" /></div>
               </div>
             </div>
           )}
@@ -317,7 +405,7 @@ export default function App() {
             ref={inputRef}
             className="query-input"
             type="text"
-            placeholder={listening ? '🎙️ Listening...' : 'Ask anything...'}
+            placeholder={listening ? '🎙️ Recording — click mic to stop...' : 'Ask anything...'}
             value={query}
             onChange={e => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
@@ -328,7 +416,7 @@ export default function App() {
             <button
               className={`mic-btn ${listening ? 'listening' : ''}`}
               onClick={handleMic}
-              title="Voice input"
+              title={listening ? 'Stop recording' : 'Voice input'}
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M12 15c1.66 0 3-1.34 3-3V6c0-1.66-1.34-3-3-3S9 4.34 9 6v6c0 1.66 1.34 3 3 3zm-1 1.93c-3.94-.49-7-3.85-7-7.93h2c0 3.31 2.69 6 6 6s6-2.69 6-6h2c0 4.08-3.06 7.44-7 7.93V21h-2v-4.07z" />
